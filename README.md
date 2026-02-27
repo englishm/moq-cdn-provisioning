@@ -1,8 +1,8 @@
 <!-- regenerate: on (set to off if you edit this file) -->
 
-# TODO - Your title
+# MoQ CDN Provisioning
 
-This is the working area for the individual Internet-Draft, "TODO - Your title".
+This is the working area for the individual Internet-Draft, "MoQ CDN Provisioning".
 
 * [Editor's Copy](https://englishm.github.io/moq-cdn-provisioning/#go.draft-englishm-moq-cdn-provisioning.html)
 * [Datatracker Page](https://datatracker.ietf.org/doc/draft-englishm-moq-cdn-provisioning)
