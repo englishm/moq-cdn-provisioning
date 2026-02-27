@@ -1,0 +1,87 @@
+openapi: 3.1.0
+info:
+  title: MoQ CDN Provisioning API
+  description: |
+    Minimal API for provisioning MoQ relay scopes on a CDN provider's
+    infrastructure. This is the machine-readable companion to
+    draft-englishm-moq-cdn-provisioning.
+
+    Only the Create Scope operation is defined here. Additional
+    operations (list, get, update, delete) are expected but not yet
+    specified.
+  version: 0.0.1
+
+paths:
+  /moq/scopes:
+    post:
+      operationId: create-scope
+      summary: Create a scope
+      description: |
+        Provisions a new MoQ scope on the relay. Returns a scope
+        identifier and connection credentials.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateScopeRequest'
+      responses:
+        '201':
+          description: Scope created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Scope'
+
+components:
+  schemas:
+    CreateScopeRequest:
+      type: object
+      description: Request body for creating a new scope.
+      properties:
+        config:
+          $ref: '#/components/schemas/ScopeConfig'
+
+    Scope:
+      type: object
+      description: |
+        A provisioned MoQ scope. Clients connect by combining the url
+        and token (e.g. {url}/{token}).
+      required:
+        - scope_id
+        - url
+        - token
+      properties:
+        scope_id:
+          type: string
+          description: Server-generated scope identifier.
+          example: "a1b2c3d4e5f6"
+        url:
+          type: string
+          description: Base URL of the relay service.
+          example: "moqt://relay.example.com"
+        token:
+          type: string
+          description: |
+            Credential granting access to this scope. Included in
+            the URL path when connecting.
+          example: "eyJhbGciOiJFZDI1NTE5..."
+        config:
+          $ref: '#/components/schemas/ScopeConfig'
+
+    ScopeConfig:
+      type: object
+      description: Scope configuration.
+      properties:
+        origin_fallback:
+          $ref: '#/components/schemas/OriginFallback'
+
+    OriginFallback:
+      type: object
+      description: |
+        When configured, the relay connects to this origin to fetch
+        content not available locally.
+      properties:
+        url:
+          type: string
+          description: URL of the upstream origin.
+          example: "https://origin.example.com"
