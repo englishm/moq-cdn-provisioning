@@ -157,7 +157,7 @@ This is configured at provisioning time:
 {
   "config": {
     "origin_fallback": {
-      "url": "https://origin.example.com"
+      "url": "moqt://origin.example.com"
     }
   }
 }
