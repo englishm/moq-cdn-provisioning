@@ -28,7 +28,7 @@ author:
  -
     fullname: "Mike English"
     organization: Cloudflare
-    email: menglish@cloudflare.com
+    email: ietf@englishm.net
 
 normative:
   MOQT: I-D.ietf-moq-transport
