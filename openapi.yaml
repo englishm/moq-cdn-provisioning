@@ -84,4 +84,4 @@ components:
         url:
           type: string
           description: URL of the upstream origin.
-          example: "https://origin.example.com"
+          example: "moqt://origin.example.com"
