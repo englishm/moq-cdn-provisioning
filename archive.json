@@ -1,6 +1,6 @@
 {
   "magic": "E!vIA5L86J2I",
-  "timestamp": "2026-03-01T00:17:45.200233+00:00",
+  "timestamp": "2026-03-03T00:17:23.241776+00:00",
   "repo": "englishm/moq-cdn-provisioning",
   "labels": [
     {
@@ -134,6 +134,62 @@
           "comments": []
         }
       ]
+    },
+    {
+      "number": 3,
+      "id": "PR_kwDORapfxs7HLqJ5",
+      "title": "Update author email in draft-englishm-moq-cdn-provisioning",
+      "url": "https://github.com/englishm/moq-cdn-provisioning/pull/3",
+      "state": "MERGED",
+      "author": "englishm",
+      "authorAssociation": "OWNER",
+      "assignees": [],
+      "labels": [],
+      "body": "Use my IETF-specific e-mail instead.",
+      "createdAt": "2026-03-01T21:18:15Z",
+      "updatedAt": "2026-03-01T21:18:26Z",
+      "baseRepository": "englishm/moq-cdn-provisioning",
+      "baseRefName": "main",
+      "baseRefOid": "cac96013d32f51edd0910a808f3f091b30b67671",
+      "headRepository": "englishm/moq-cdn-provisioning",
+      "headRefName": "me/fix-email",
+      "headRefOid": "b0f23c0bbaeda3b0cfa4331f2cbd3deca6c2222c",
+      "closedAt": "2026-03-01T21:18:26Z",
+      "mergedAt": "2026-03-01T21:18:26Z",
+      "mergedBy": "englishm",
+      "mergeCommit": {
+        "oid": "f129c0a45ff11f28422c87b05ba1fc362057b968"
+      },
+      "comments": [],
+      "reviews": []
+    },
+    {
+      "number": 4,
+      "id": "PR_kwDORapfxs7HLs6N",
+      "title": "Update origin scheme for clarity",
+      "url": "https://github.com/englishm/moq-cdn-provisioning/pull/4",
+      "state": "MERGED",
+      "author": "englishm",
+      "authorAssociation": "OWNER",
+      "assignees": [],
+      "labels": [],
+      "body": "",
+      "createdAt": "2026-03-01T21:25:56Z",
+      "updatedAt": "2026-03-01T21:28:09Z",
+      "baseRepository": "englishm/moq-cdn-provisioning",
+      "baseRefName": "main",
+      "baseRefOid": "f129c0a45ff11f28422c87b05ba1fc362057b968",
+      "headRepository": "englishm/moq-cdn-provisioning",
+      "headRefName": "me/origin-scheme",
+      "headRefOid": "d8cb98cd9ff7f721051746f135090b68bb82ebad",
+      "closedAt": "2026-03-01T21:28:09Z",
+      "mergedAt": "2026-03-01T21:28:09Z",
+      "mergedBy": "englishm",
+      "mergeCommit": {
+        "oid": "9be272bd4b51c858792bdd7490f340a1defde572"
+      },
+      "comments": [],
+      "reviews": []
     }
   ]
 }
