@@ -1,6 +1,6 @@
 {
   "magic": "E!vIA5L86J2I",
-  "timestamp": "2026-03-05T00:17:05.031051+00:00",
+  "timestamp": "2026-03-08T00:15:59.755640+00:00",
   "repo": "englishm/moq-cdn-provisioning",
   "labels": [
     {
@@ -49,7 +49,24 @@
       "color": "ffffff"
     }
   ],
-  "issues": [],
+  "issues": [
+    {
+      "number": 5,
+      "id": "I_kwDORapfxs7wESdV",
+      "title": "Feedback from Will",
+      "url": "https://github.com/englishm/moq-cdn-provisioning/issues/5",
+      "state": "OPEN",
+      "author": "wilaw",
+      "authorAssociation": "NONE",
+      "assignees": [],
+      "labels": [],
+      "body": "Hey Mike\n\nThanks for starting this very useful project. \n\nThis API is about establishing a common scope between CDNs, so that \"superbowl2028\" for example can be used as a consistent namespace across both Cloudfront and Akamai and will result in cache consistency and identical content being delivered by both CDNs.\n\n\n1 When calling the API, the user should be able to request a scope name. This is because in provisioning its easier to work with meaningful scope names (such as 'superbowl2028') rather than random IDs (such as 'a1b2c3d4e5f6'). If you want to intentionally obfuscate your event, that's fine too, just request a random ID. The API can check whether the requested scope name is already in use. If it is, it can suggest a modification to make it unique, or else just reject it with a non-unique error and the user can call again. \n2. We need some rules for the permanence of scope declarations. Do they last forever? Or do they have a default expiry date which can be extended in the future? Having an expiry date stops us having to keep DB entries for every hello-world test created, although it also opens up problems of URIs that break in the future because the scope expired. \n3. We should agree that once issued,  the first tuple in the namespace MUST carry the scope. This makes scope declaration explicit and debugging simple. The scope can be retrieved by any path component without having to consult a lookup table to translate a namespace into a scope. \n4. I'd like to decouple the token issuance from scope creation. The reason is that I'd like to issue a single token to the end-client that authorizes both their connection to the service and the MOQT actions they can take once connected. To do the latter, I need to know the full track name that they wish to access. Therefore the token should be generated at namesapce  provisioning time and not at scope reservation. I'd also like to provision a different token for end-user players versus CDN fallback. \n5. I also think that origin fallback should be decoupled from scope reservation. Unless there is a 1:1 correspondence between scope and namespace, then it's not reasonable to assume that every track under a scope can fall back to the same origin. Every CDN will have some mechanism for namespace provisioning, in which for every namespace/name combination the user will be able to specify the origin and also a fall-back origin. This is the point at which the fallback origin should be configured. If we can agree on [3], then our scopes will be consistent between multiple CDNs, as long as each has been reserved via your API.\n \nHere's how it might work with an example. \n\nCustomer wants to configure MOQT delivery for Superbowl 2028 across both Cloudfront and Akamai. They also want each CDN to act as a fallback origin for the other, for maximum reliability.\n\n1. Customer decides upon a scope name - 'superbowl2028'. It won't be this simple IRL, but is useful for this example. \n2. They call the Scope Reservation API on Cloudfront and request 'superbowl2028'.  it approves and registers this scope as belonging to that customer on your network.\n3. They call the Scope Reservation API on Akamai and request 'superbowl2028'.  It approves and registers this scope as belonging to that customer on our network. \n4. They call the Namespace Provisioning API on Cloudfront and provision a namespace for live streams originating in Houston, providing the previously registered scope. They also request a fallback URl for Akamai.  The API returns 4 things\n    1. A URI for players to connect via Cloudfront\n    2. A token for players to connect\n    3. A URI for Akamai to connect as fallback\n    4. A token for Akamai to connect as fallback // this is different to the end-user token, as it can include a secret previously shared between Cloudfront and Akamai. \n5. They call the Namespace Provisioning API on Akamai and provision a namespace for live streams originating in Houston, providing the previously registered scope, the fallback URI and the token from Cloudfront. They also request a fallback URl for Cloudfront  The API returns 4 things:\n    1. A URI for players to connect via Akamai\n    2. A token for players to connect\n    3. A URI for Cloudfront to connect as fallback\n    4. A token for Cloudfront to connect as fallback\n6.  They call the Namespace Provisioning API on Cloudfront and update the previously provisioned namespace to include the fallback URI and token from Akamai. \n\nLet me know if you agree on these workflow steps and then I can help mock up the API input and output.\n\nCheers\nWill\n",
+      "createdAt": "2026-03-05T11:31:26Z",
+      "updatedAt": "2026-03-05T11:31:26Z",
+      "closedAt": null,
+      "comments": []
+    }
+  ],
   "pulls": [
     {
       "number": 1,
