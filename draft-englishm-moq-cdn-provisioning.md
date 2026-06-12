@@ -37,7 +37,6 @@ normative:
   RFC8705:
   RFC9449:
   CAT4MOQ: I-D.ietf-moq-c4m
-  PRIVACYPASS-MOQ: I-D.ietf-moq-privacy-pass-auth
 
 informative:
   RFC9110:
@@ -155,7 +154,7 @@ and a mechanism for obtaining credentials:
     ]
   },
   "token_endpoint": "https://auth.cdn.example.com/moq/token",
-  "supported_credential_types": ["cat", "cat+dpop", "privacy_pass"],
+  "supported_credential_types": ["cat", "cat+dpop"],
   "default_credential_type": "cat",
   "token": "eyJhbGciOiJFZDI1NTE5..."
 }
@@ -180,7 +179,7 @@ The `token` is an initial credential
 returned for bootstrapping convenience.
 It MUST be short-lived.
 Clients use the token endpoint
-to obtain properly-bound CAT or Privacy Pass credentials
+to obtain properly-bound CAT credentials
 for ongoing access.
 
 ## Scope Lifecycle
@@ -234,7 +233,6 @@ The supported token types are:
 
 - CAT (CWT Authentication Token) — see {{cat-moq}}
 - CAT with DPoP — see {{cat-dpop}}
-- Privacy Pass — see {{privacy-pass-moq}}
 
 These mechanisms carry both the credential
 and cryptographic proof-of-possession
@@ -458,65 +456,6 @@ Relays MUST reject DPoP proofs
 with timestamps outside the acceptable window
 or with previously-seen `jti` values.
 
-### Privacy Pass for MoQT {#privacy-pass-moq}
-
-Privacy Pass for MoQT {{PRIVACYPASS-MOQ}}
-enables unlinkable authorization tokens
-suitable for anonymous or pseudonymous access.
-
-Privacy Pass tokens prove that a client
-has been authorized (e.g., has a valid subscription)
-without revealing which specific client
-is making a request.
-This is particularly useful for subscriber access
-where individual identity is not required.
-
-~~~json
-{
-  "scope_id": "a1b2c3d4e5f6",
-  "credential_type": "privacy_pass",
-  "token_endpoint": "https://auth.cdn.example.com/moq/token",
-  "privacy_pass": {
-    "issuer": "https://issuer.cdn.example.com",
-    "token_type": 0x0002,
-    "redemption_context": "scope:a1b2c3d4e5f6"
-  }
-}
-~~~
-
-When using Privacy Pass, the client:
-
-1. Obtains a batch of blinded tokens
-   from the token endpoint
-   (this step links identity to issuance,
-   but not to redemption)
-2. Presents one unblinded token per
-   MoQT session or control message
-3. The relay validates the token
-   with the issuer's public key
-   without learning which issuance
-   the token corresponds to
-
-Privacy Pass tokens are single-use.
-Clients SHOULD obtain tokens in batches
-and present a fresh token
-for each new session or authorization context.
-
-Privacy Pass is best suited for:
-
-- Subscriber-only access
-  where namespace-level authorization
-  is uniform across subscribers
-- Scenarios requiring audience privacy
-  (e.g., viewer counts without viewer identity)
-- Rate-limited access without per-user tracking
-
-For publisher access or fine-grained
-namespace authorization,
-CAT or CAT+DPoP is more appropriate
-since Privacy Pass tokens
-cannot carry per-client claims.
-
 ### Credential Type Selection
 
 The provisioning API advertises
@@ -528,8 +467,7 @@ in the scope configuration:
   "scope_id": "a1b2c3d4e5f6",
   "supported_credential_types": [
     "cat",
-    "cat+dpop",
-    "privacy_pass"
+    "cat+dpop"
   ],
   "default_credential_type": "cat"
 }
@@ -541,7 +479,6 @@ The preference order from strongest to weakest is:
 
 1. `cat+dpop` — Proof-of-possession with replay protection
 2. `cat` — Proof-of-possession
-3. `privacy_pass` — Unlinkable tokens (for subscribers)
 
 Relays MAY reject connections
 using credential types weaker than
@@ -1237,7 +1174,7 @@ Credentials issued by the provisioning API:
   if compromised.
 - MUST use proof-of-possession mechanisms
   ({{pop-credentials}}).
-  CAT and Privacy Pass bind credentials
+  CAT binds credentials
   to the client's cryptographic key,
   ensuring a captured token is unusable
   without the corresponding private key.
@@ -1256,14 +1193,6 @@ relays MUST enforce:
 - Nonce freshness to prevent replay
 - Timestamp bounds (RECOMMENDED: 60 seconds)
 - `jti` uniqueness within the replay window
-
-When using Privacy Pass ({{privacy-pass-moq}}):
-
-- Issuers MUST NOT correlate issuance
-  with redemption (this is the core privacy property)
-- Relays MUST reject reused tokens
-- The redemption context SHOULD be bound
-  to the scope_id to prevent cross-scope replay
 
 ## Scope Mapping Security
 
