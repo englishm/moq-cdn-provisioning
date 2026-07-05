@@ -2,13 +2,17 @@ openapi: 3.1.0
 info:
   title: MoQ CDN Provisioning API
   description: |
-    API for provisioning MoQ relay scopes on a CDN provider's
+    API for provisioning MoQ Scopes on a CDN provider's
     infrastructure. This is the machine-readable companion to
     draft-englishm-moq-cdn-provisioning.
 
-    Covers scope lifecycle, credential management, relay topology,
-    authorization policy, and health monitoring.
-  version: 0.1.0
+    Covers scope lifecycle, signing key provisioning,
+    authorization policy, and upstream fallback configuration.
+
+    The Application Provider mints MoQ Access Tokens
+    and distributes them to clients. The CDN validates
+    tokens using public signing keys provisioned here.
+  version: 0.2.0
 
 servers:
   - url: https://api.cdn.example.com
@@ -22,11 +26,10 @@ paths:
   /moq/scopes:
     post:
       operationId: create-scope
-      summary: Create a scope
+      summary: Create a MoQ Scope
       description: |
-        Provisions a new MoQ scope on the relay infrastructure.
-        Returns a scope identifier, discovery information, and
-        initial credentials.
+        Provisions a new MoQ Scope on the relay infrastructure.
+        Returns a scope identifier and a MoQT URL for client connections.
       requestBody:
         required: true
         content:
@@ -52,14 +55,14 @@ paths:
       - $ref: '#/components/parameters/ScopeId'
     get:
       operationId: get-scope
-      summary: Get scope configuration and status
+      summary: Get scope configuration
       responses:
         '200':
           description: Scope details
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ScopeWithStatus'
+                $ref: '#/components/schemas/Scope'
         '404':
           description: Scope not found
     patch:
@@ -77,7 +80,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ScopeWithStatus'
+                $ref: '#/components/schemas/Scope'
         '404':
           description: Scope not found
     delete:
@@ -92,90 +95,81 @@ paths:
         '404':
           description: Scope not found
 
-  /moq/scopes/{scope_id}/tokens:
+  /moq/scopes/{scope_id}/signing-keys:
     parameters:
       - $ref: '#/components/parameters/ScopeId'
     post:
-      operationId: issue-token
-      summary: Issue a new credential for this scope
+      operationId: add-signing-key
+      summary: Add a signing key for token validation
+      description: |
+        Registers a public signing key that relays use to validate
+        MoQ Access Tokens for this scope. The Application Provider
+        mints tokens signed with the corresponding private key.
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/TokenRequest'
+              $ref: '#/components/schemas/SigningKeyRequest'
       responses:
         '201':
-          description: Token issued
+          description: Signing key added
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TokenResponse'
+                $ref: '#/components/schemas/SigningKey'
+        '400':
+          description: Invalid key format or unsupported algorithm
+        '409':
+          description: Key ID already exists
     get:
-      operationId: list-tokens
-      summary: List active tokens for this scope
+      operationId: list-signing-keys
+      summary: List signing keys for this scope
       responses:
         '200':
-          description: Token list
+          description: Signing key list
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  tokens:
+                  keys:
                     type: array
                     items:
-                      $ref: '#/components/schemas/TokenInfo'
+                      $ref: '#/components/schemas/SigningKey'
 
-  /moq/scopes/{scope_id}/tokens/{token_id}:
+  /moq/scopes/{scope_id}/signing-keys/{key_id}:
     parameters:
       - $ref: '#/components/parameters/ScopeId'
-      - name: token_id
+      - name: key_id
         in: path
         required: true
         schema:
           type: string
+    get:
+      operationId: get-signing-key
+      summary: Get a signing key
+      responses:
+        '200':
+          description: Signing key details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SigningKey'
+        '404':
+          description: Key not found
     delete:
-      operationId: revoke-token
-      summary: Revoke a credential
+      operationId: remove-signing-key
+      summary: Remove a signing key
+      description: |
+        Removes a signing key. Tokens signed by this key will be
+        rejected immediately. Provision a replacement key before
+        removing the old one to avoid disruption.
       responses:
         '204':
-          description: Token revoked
+          description: Signing key removed
         '404':
-          description: Token not found
-
-  /moq/scopes/{scope_id}/relays/{relay_id}/drain:
-    parameters:
-      - $ref: '#/components/parameters/ScopeId'
-      - name: relay_id
-        in: path
-        required: true
-        schema:
-          type: string
-    post:
-      operationId: drain-relay
-      summary: Initiate graceful drain of a relay
-      description: |
-        The relay stops accepting new connections, sends GOAWAY
-        to existing clients, and shuts down after migration completes.
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                redirect_url:
-                  type: string
-                  description: URL to include in GOAWAY for client migration
-                timeout_seconds:
-                  type: integer
-                  description: Maximum time to wait for drain completion
-                  default: 300
-      responses:
-        '202':
-          description: Drain initiated
-        '404':
-          description: Relay not found
+          description: Key not found
 
 components:
   securitySchemes:
@@ -198,110 +192,63 @@ components:
   schemas:
     CreateScopeRequest:
       type: object
-      description: Request body for creating a new scope.
+      description: Request body for creating a new MoQ Scope.
       properties:
         config:
           $ref: '#/components/schemas/ScopeConfig'
+        signing_keys:
+          type: array
+          items:
+            $ref: '#/components/schemas/SigningKeyRequest'
+          description: |
+            Initial signing keys to provision with the scope.
+            At least one key is required for relays to validate
+            MoQ Access Tokens.
 
     Scope:
       type: object
-      description: A provisioned MoQ scope with discovery and credentials.
+      description: A provisioned MoQ Scope.
       required:
         - scope_id
-        - discovery
-        - token
+        - url
+        - supported_token_types
       properties:
         scope_id:
           type: string
           description: Server-generated scope identifier.
           example: "a1b2c3d4e5f6"
-        discovery:
-          $ref: '#/components/schemas/Discovery'
-        token_endpoint:
-          type: string
-          format: uri
-          description: OAuth 2.0 token endpoint for obtaining additional credentials.
-          example: "https://auth.cdn.example.com/moq/token"
-        token:
+        url:
           type: string
           description: |
-            Initial short-lived credential granting access to this scope.
-          example: "eyJhbGciOiJFZDI1NTE5..."
+            MoQT URL for client connections to this scope.
+            How the CDN routes behind this URL is an operational
+            concern not exposed through this API.
+          example: "moqt://relay.example.com"
+        supported_token_types:
+          type: array
+          items:
+            type: string
+            enum: [c4m, c4m+dpop-proof+cwt]
+          description: |
+            MoQ Access Token types the relay accepts.
+            CDN providers MUST support both c4m and c4m+dpop-proof+cwt.
+          example: ["c4m", "c4m+dpop-proof+cwt"]
+        signing_keys:
+          type: array
+          items:
+            $ref: '#/components/schemas/SigningKey'
+          description: Currently provisioned signing keys.
         config:
           $ref: '#/components/schemas/ScopeConfig'
 
-    ScopeWithStatus:
-      allOf:
-        - $ref: '#/components/schemas/Scope'
-        - type: object
-          properties:
-            status:
-              $ref: '#/components/schemas/ScopeStatus'
-
-    ScopeStatus:
-      type: object
-      description: Runtime status of a scope.
-      properties:
-        state:
-          type: string
-          enum: [active, draining, inactive]
-        active_publishers:
-          type: integer
-        active_subscribers:
-          type: integer
-        relay_count:
-          type: integer
-        cache_objects:
-          type: integer
-
-    Discovery:
-      type: object
-      description: How clients discover relay infrastructure for this scope.
-      properties:
-        url:
-          type: string
-          description: Primary relay URL (may be anycast).
-          example: "moqt://relay.example.com"
-        regional_endpoints:
-          type: array
-          items:
-            $ref: '#/components/schemas/RegionalEndpoint'
-        orchestration_url:
-          type: string
-          format: uri
-          description: Client steering service URL.
-
-    RegionalEndpoint:
-      type: object
-      required: [region, url]
-      properties:
-        region:
-          type: string
-          example: "us-west-2"
-        url:
-          type: string
-          example: "moqt://usw2.relay.example.com"
-
     ScopeConfig:
       type: object
-      description: Scope configuration.
+      description: MoQ Scope configuration.
       properties:
         auth_policy:
           $ref: '#/components/schemas/AuthPolicy'
-        topology:
-          $ref: '#/components/schemas/Topology'
-        origin_fallback:
-          $ref: '#/components/schemas/OriginFallback'
-        namespace_propagation:
-          $ref: '#/components/schemas/NamespacePropagation'
-        cache:
-          $ref: '#/components/schemas/CachePolicy'
-        health:
-          $ref: '#/components/schemas/HealthConfig'
-        relay_credentials:
-          $ref: '#/components/schemas/RelayCredentials'
-        federation:
-          $ref: '#/components/schemas/Federation'
+        upstream_fallback:
+          $ref: '#/components/schemas/UpstreamFallback'
 
     AuthPolicy:
       type: object
@@ -339,87 +286,16 @@ components:
           type: integer
           description: Maximum concurrent subscribers for this prefix.
 
-    Topology:
+    UpstreamFallback:
       type: object
-      description: Relay topology within this scope.
-      properties:
-        relays:
-          type: array
-          items:
-            $ref: '#/components/schemas/RelayConfig'
-
-    RelayConfig:
-      type: object
-      required: [relay_id, role]
-      properties:
-        relay_id:
-          type: string
-          description: Unique identifier for this relay.
-          example: "edge-usw-01"
-        role:
-          type: string
-          enum: [edge, via, origin]
-          description: Role of this relay in the topology.
-        region:
-          type: string
-          description: Geographic region of this relay.
-          example: "us-west-2"
-        upstream:
-          type: array
-          items:
-            $ref: '#/components/schemas/UpstreamPeer'
-          description: Upstream peers for this relay.
-
-    UpstreamPeer:
-      type: object
-      required: [relay_id]
-      properties:
-        relay_id:
-          type: string
-          description: ID of the upstream relay.
-        priority:
-          type: integer
-          default: 1
-          description: Lower value means higher preference.
-        weight:
-          type: integer
-          default: 100
-          description: Load distribution weight among same-priority peers.
-
-    OriginFallback:
-      type: object
-      description: Upstream origin configuration for cache misses.
-      properties:
-        origins:
-          type: array
-          items:
-            $ref: '#/components/schemas/Origin'
-        connect_on:
-          type: string
-          enum: [cache_miss, eager, subscribe_namespace]
-          default: cache_miss
-          description: When to establish the upstream connection.
-        health_check:
-          type: object
-          properties:
-            interval_seconds:
-              type: integer
-              default: 5
-            timeout_seconds:
-              type: integer
-              default: 2
-
-    Origin:
-      type: object
-      required: [url]
+      description: |
+        Upstream MoQT endpoint operated by the Application Provider.
+        The relay connects here when content is not available locally.
       properties:
         url:
           type: string
-          description: MoQT URL of the origin.
-          example: "moqt://origin.example.com"
-        priority:
-          type: integer
-          default: 1
+          description: MoQT URL of the Application Provider's upstream endpoint.
+          example: "moqt://publish.app-provider.example.com"
         namespaces:
           type: array
           items:
@@ -429,253 +305,44 @@ components:
                 type: array
                 items:
                   type: string
-          description: Namespace prefixes served by this origin.
-        credential:
-          type: string
-          description: Reference to relay credential for authenticating to this origin.
+          description: Namespace prefixes to fetch from upstream.
 
-    NamespacePropagation:
+    SigningKeyRequest:
       type: object
-      description: Controls namespace advertisement and subscription propagation.
+      required: [key_id, algorithm, public_key]
       properties:
-        advertise_downstream:
-          type: array
-          items:
-            type: object
-            properties:
-              prefix:
-                type: array
-                items:
-                  type: string
-              propagate:
-                type: boolean
-                default: true
-        subscribe_upstream:
-          type: array
-          items:
-            type: object
-            properties:
-              prefix:
-                type: array
-                items:
-                  type: string
-              on:
-                type: string
-                enum: [client_interest, always, never]
-                default: client_interest
-
-    CachePolicy:
-      type: object
-      description: Cache behavior for relays in this scope.
-      properties:
-        enabled:
-          type: boolean
-          default: true
-        max_duration_seconds:
-          type: integer
-          default: 300
-          description: Maximum age of cached objects.
-        max_objects_per_track:
-          type: integer
-          default: 1000
-        eviction:
-          type: string
-          enum: [lru, fifo]
-          default: lru
-
-    HealthConfig:
-      type: object
-      description: Health monitoring configuration.
-      properties:
-        reporting_endpoint:
-          type: string
-          format: uri
-        interval_seconds:
-          type: integer
-          default: 10
-        drain_threshold:
-          type: object
-          properties:
-            subscriber_count:
-              type: integer
-            bandwidth_mbps:
-              type: integer
-        goaway_on_drain:
-          type: boolean
-          default: true
-
-    RelayCredentials:
-      type: object
-      description: Authentication method for relay-to-relay peering.
-      properties:
-        method:
-          type: string
-          enum: [mutual_tls, signed_token]
-          description: Authentication mechanism.
-        ca_certificate:
-          type: string
-          description: PEM-encoded CA certificate for mutual TLS.
-        allowed_identities:
-          type: array
-          items:
-            type: string
-          description: Allowed CN/SAN patterns for peer relays.
-          example: ["*.relay.cdn.example.com"]
-
-    Federation:
-      type: object
-      description: Multi-CDN federation configuration.
-      properties:
-        federation_id:
+        key_id:
           type: string
           description: |
-            Common identifier for this scope across all participating
-            CDN providers. Typically a URN.
-          example: "urn:moq:scope:live-event-2026"
-        role:
+            Application-provided identifier for this key.
+            Used for key rotation and revocation.
+          example: "key-2026-q3"
+        algorithm:
           type: string
-          enum: [primary, secondary]
-          description: This provider's role in the federation.
-        primary_provider:
-          type: object
-          description: Primary provider information (set when role is secondary).
-          properties:
-            provisioning_api:
-              type: string
-              format: uri
-            peering_url:
-              type: string
-              description: MoQT URL for inter-CDN peering.
-        auth_issuers:
-          type: array
-          items:
-            type: string
-            format: uri
+          enum: [ES256]
+          description: Signing algorithm. ES256 is required.
+        public_key:
+          type: string
           description: |
-            Trusted token issuers across the federation. Relays accept
-            tokens signed by any listed issuer.
-        namespace_ownership:
-          type: object
-          description: Which namespace prefixes this provider owns vs. peers own.
-          properties:
-            local:
-              type: array
-              items:
-                type: object
-                properties:
-                  prefix:
-                    type: array
-                    items:
-                      type: string
-              description: Prefixes this provider is authoritative for.
-            remote:
-              type: array
-              items:
-                type: object
-                properties:
-                  prefix:
-                    type: array
-                    items:
-                      type: string
-              description: Prefixes owned by peer providers (fetched via peering).
-        peers:
-          type: array
-          items:
-            $ref: '#/components/schemas/FederationPeer'
+            PEM-encoded public key corresponding to the private key
+            used by the Application Provider to sign MoQ Access Tokens.
+          example: "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE..."
 
-    FederationPeer:
+    SigningKey:
       type: object
-      description: A peer CDN provider in the federation.
-      required: [provider_name, peering_url]
+      required: [key_id, algorithm, public_key]
       properties:
-        provider_name:
+        key_id:
           type: string
-          example: "cdn-secondary"
-        peering_url:
+          description: Key identifier.
+          example: "key-2026-q3"
+        algorithm:
           type: string
-          description: MoQT URL for the peering relay at this provider.
-          example: "moqt://peering.cdn-secondary.example.com"
-        credential:
+          enum: [ES256]
+        public_key:
           type: string
-          description: Reference to the relay credential for authenticating to this peer.
-        namespaces_offered:
-          type: array
-          items:
-            type: object
-            properties:
-              prefix:
-                type: array
-                items:
-                  type: string
-          description: Namespaces this peer offers (we subscribe from them).
-        namespaces_requested:
-          type: array
-          items:
-            type: object
-            properties:
-              prefix:
-                type: array
-                items:
-                  type: string
-          description: Namespaces this peer requests from us (they subscribe).
-
-    TokenRequest:
-      type: object
-      required: [role]
-      properties:
-        role:
-          type: string
-          enum: [publish, subscribe, pubsub, relay]
-          description: Role this token grants.
-        namespaces:
-          type: array
-          items:
-            type: object
-            properties:
-              prefix:
-                type: array
-                items:
-                  type: string
-              ops:
-                type: array
-                items:
-                  type: string
-                  enum: [publish, subscribe]
-          description: Namespace-scoped permissions.
-        lifetime_seconds:
-          type: integer
-          default: 3600
-          description: Token validity duration.
-        subject:
-          type: string
-          description: Identifier for the token holder.
-
-    TokenResponse:
-      type: object
-      required: [token_id, token]
-      properties:
-        token_id:
-          type: string
-          description: Identifier for this token (for revocation).
-        token:
-          type: string
-          description: Signed JWT credential.
-        expires_at:
+          description: PEM-encoded public key.
+        created_at:
           type: string
           format: date-time
-          description: Token expiration timestamp.
-
-    TokenInfo:
-      type: object
-      properties:
-        token_id:
-          type: string
-        subject:
-          type: string
-        role:
-          type: string
-        expires_at:
-          type: string
-          format: date-time
-        active:
-          type: boolean
+          description: When this key was provisioned.
