@@ -143,7 +143,7 @@ POST /moq/scopes
 ~~~
 
 The request MAY include configuration
-(see {{upstream-fallback}}, {{auth-policy}}).
+(see {{upstream-fallback}}).
 
 The response includes
 a server-generated scope identifier
@@ -175,6 +175,7 @@ See {{token-validation}}.
 The API supports the full lifecycle of a MoQ Scope:
 
 ~~~
+GET    /moq/scopes              - List all scopes
 POST   /moq/scopes              - Create
 GET    /moq/scopes/{scope_id}   - Read configuration
 PATCH  /moq/scopes/{scope_id}   - Update configuration
@@ -335,52 +336,6 @@ All tokens signed by that key
 are immediately invalidated
 across all relays serving the scope.
 
-# Authorization Policy {#auth-policy}
-
-A MoQ Scope MAY be configured with
-namespace-level authorization rules
-that restrict which operations
-are permitted for a given MoQ Access Token.
-
-~~~json
-{
-  "config": {
-    "auth_policy": {
-      "rules": [
-        {
-          "namespace_prefix": ["live", "meeting-42"],
-          "operations": ["publish", "subscribe"]
-        },
-        {
-          "namespace_prefix": ["live", "meeting-42", "screen"],
-          "operations": ["publish"],
-          "max_publishers": 1
-        }
-      ],
-      "default_deny": true
-    }
-  }
-}
-~~~
-
-When `default_deny` is true,
-any operation on a namespace
-not matching a rule is rejected.
-
-Authorization rules are evaluated
-using longest-prefix match:
-the most specific matching rule applies.
-
-The authorization policy configured at the scope level
-defines the maximum permissions available.
-Individual MoQ Access Tokens
-carry their own namespace claims
-which MUST be a subset of the scope's policy.
-The relay enforces both:
-the token's claims limit what the client requests,
-and the scope's policy limits
-what any token can authorize.
-
 # Upstream Fallback {#upstream-fallback}
 
 A MoQ Scope MAY be configured
@@ -393,13 +348,30 @@ the relay connects to the upstream endpoint to fetch it.
 ~~~json
 {
   "config": {
-    "upstream_fallback": {
-      "url": "moqt://publish.app-provider.example.com",
-      "namespaces": [{"prefix": ["live"]}]
-    }
+    "upstream_fallback": [
+      {
+        "namespace_prefix": ["live", "meeting-42"],
+        "urls": [
+          "moqt://publish-us.app-provider.example.com",
+          "moqt://publish-eu.app-provider.example.com"
+        ]
+      },
+      {
+        "namespace_prefix": ["live", "meeting-43"],
+        "urls": [
+          "moqt://publish-us.app-provider.example.com"
+        ]
+      }
+    ]
   }
 }
 ~~~
+
+Each entry specifies a namespace prefix
+and one or more upstream MoQT URLs for that namespace.
+When multiple URLs are provided,
+they serve as fallbacks
+(the relay tries them in order).
 
 The relay establishes a MoQT connection
 to the upstream URL

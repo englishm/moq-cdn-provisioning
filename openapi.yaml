@@ -24,6 +24,26 @@ security:
 
 paths:
   /moq/scopes:
+    get:
+      operationId: list-scopes
+      summary: List all MoQ Scopes
+      description: |
+        Returns all MoQ Scopes belonging to the authenticated
+        Application Provider.
+      responses:
+        '200':
+          description: Scope list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  scopes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Scope'
+        '401':
+          description: Authentication required
     post:
       operationId: create-scope
       summary: Create a MoQ Scope
@@ -245,67 +265,35 @@ components:
       type: object
       description: MoQ Scope configuration.
       properties:
-        auth_policy:
-          $ref: '#/components/schemas/AuthPolicy'
         upstream_fallback:
           $ref: '#/components/schemas/UpstreamFallback'
 
-    AuthPolicy:
-      type: object
-      description: Namespace-level authorization rules.
-      properties:
-        rules:
-          type: array
-          items:
-            $ref: '#/components/schemas/AuthRule'
-        default_deny:
-          type: boolean
-          default: true
-          description: Reject operations not matching any rule.
-
-    AuthRule:
-      type: object
-      required: [namespace_prefix, operations]
-      properties:
-        namespace_prefix:
-          type: array
-          items:
-            type: string
-          description: Track namespace prefix to match.
-          example: ["live", "meeting-42"]
-        operations:
-          type: array
-          items:
-            type: string
-            enum: [publish, subscribe]
-          description: Permitted operations for this prefix.
-        max_publishers:
-          type: integer
-          description: Maximum concurrent publishers for this prefix.
-        max_subscribers:
-          type: integer
-          description: Maximum concurrent subscribers for this prefix.
-
     UpstreamFallback:
-      type: object
+      type: array
       description: |
-        Upstream MoQT endpoint operated by the Application Provider.
-        The relay connects here when content is not available locally.
-      properties:
-        url:
-          type: string
-          description: MoQT URL of the Application Provider's upstream endpoint.
-          example: "moqt://publish.app-provider.example.com"
-        namespaces:
-          type: array
-          items:
-            type: object
-            properties:
-              prefix:
-                type: array
-                items:
-                  type: string
-          description: Namespace prefixes to fetch from upstream.
+        List of namespace-to-URLs mappings for upstream fallback.
+        The relay connects to these Application Provider endpoints
+        when content is not available locally.
+      items:
+        type: object
+        required: [namespace_prefix, urls]
+        properties:
+          namespace_prefix:
+            type: array
+            items:
+              type: string
+            description: Namespace prefix this fallback serves.
+            example: ["live", "meeting-42"]
+          urls:
+            type: array
+            items:
+              type: string
+            description: |
+              Ordered list of upstream MoQT URLs for this namespace.
+              The relay tries them in order as fallbacks.
+            example:
+              - "moqt://publish-us.app-provider.example.com"
+              - "moqt://publish-eu.app-provider.example.com"
 
     SigningKeyRequest:
       type: object
