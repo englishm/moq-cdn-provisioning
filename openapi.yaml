@@ -2,24 +2,56 @@ openapi: 3.1.0
 info:
   title: MoQ CDN Provisioning API
   description: |
-    Minimal API for provisioning MoQ relay scopes on a CDN provider's
+    API for provisioning MoQ Scopes on a CDN provider's
     infrastructure. This is the machine-readable companion to
     draft-englishm-moq-cdn-provisioning.
 
-    Only the Create Scope operation is defined here. Additional
-    operations (list, get, update, delete) are expected but not yet
-    specified.
-  version: 0.0.1
+    Covers scope lifecycle, signing key provisioning,
+    authorization policy, and upstream fallback configuration.
+
+    The Application Provider mints MoQ Access Tokens
+    and distributes them to clients. The CDN validates
+    tokens using public signing keys provisioned here.
+  version: 0.2.0
+
+servers:
+  - url: https://api.cdn.example.com
+    description: Example CDN provisioning endpoint
+
+security:
+  - bearerAuth: []
+  - mutualTLS: []
 
 paths:
   /moq/scopes:
+    get:
+      operationId: list-scopes
+      summary: List all MoQ Scopes
+      description: |
+        Returns all MoQ Scopes belonging to the authenticated
+        Application Provider.
+      responses:
+        '200':
+          description: Scope list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  scopes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Scope'
+        '401':
+          description: Authentication required
     post:
       operationId: create-scope
-      summary: Create a scope
+      summary: Create a MoQ Scope
       description: |
-        Provisions a new MoQ scope on the relay. Returns a scope
-        identifier and connection credentials.
+        Provisions a new MoQ Scope on the relay infrastructure.
+        Returns a scope identifier and a MoQT URL for client connections.
       requestBody:
+        required: true
         content:
           application/json:
             schema:
@@ -31,25 +63,175 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Scope'
+        '400':
+          description: Invalid configuration
+        '401':
+          description: Authentication required
+        '403':
+          description: Insufficient permissions
+
+  /moq/scopes/{scope_id}:
+    parameters:
+      - $ref: '#/components/parameters/ScopeId'
+    get:
+      operationId: get-scope
+      summary: Get scope configuration
+      responses:
+        '200':
+          description: Scope details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Scope'
+        '404':
+          description: Scope not found
+    patch:
+      operationId: update-scope
+      summary: Update scope configuration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScopeConfig'
+      responses:
+        '200':
+          description: Scope updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Scope'
+        '404':
+          description: Scope not found
+    delete:
+      operationId: delete-scope
+      summary: Delete scope (initiates drain)
+      description: |
+        Begins graceful teardown. The relay sends GOAWAY to all
+        connected clients before terminating the scope.
+      responses:
+        '202':
+          description: Drain initiated
+        '404':
+          description: Scope not found
+
+  /moq/scopes/{scope_id}/signing-keys:
+    parameters:
+      - $ref: '#/components/parameters/ScopeId'
+    post:
+      operationId: add-signing-key
+      summary: Add a signing key for token validation
+      description: |
+        Registers a public signing key that relays use to validate
+        MoQ Access Tokens for this scope. The Application Provider
+        mints tokens signed with the corresponding private key.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SigningKeyRequest'
+      responses:
+        '201':
+          description: Signing key added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SigningKey'
+        '400':
+          description: Invalid key format or unsupported algorithm
+        '409':
+          description: Key ID already exists
+    get:
+      operationId: list-signing-keys
+      summary: List signing keys for this scope
+      responses:
+        '200':
+          description: Signing key list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  keys:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SigningKey'
+
+  /moq/scopes/{scope_id}/signing-keys/{key_id}:
+    parameters:
+      - $ref: '#/components/parameters/ScopeId'
+      - name: key_id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: get-signing-key
+      summary: Get a signing key
+      responses:
+        '200':
+          description: Signing key details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SigningKey'
+        '404':
+          description: Key not found
+    delete:
+      operationId: remove-signing-key
+      summary: Remove a signing key
+      description: |
+        Removes a signing key. Tokens signed by this key will be
+        rejected immediately. Provision a replacement key before
+        removing the old one to avoid disruption.
+      responses:
+        '204':
+          description: Signing key removed
+        '404':
+          description: Key not found
 
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    mutualTLS:
+      type: mutualTLS
+
+  parameters:
+    ScopeId:
+      name: scope_id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Server-generated scope identifier
+
   schemas:
     CreateScopeRequest:
       type: object
-      description: Request body for creating a new scope.
+      description: Request body for creating a new MoQ Scope.
       properties:
         config:
           $ref: '#/components/schemas/ScopeConfig'
+        signing_keys:
+          type: array
+          items:
+            $ref: '#/components/schemas/SigningKeyRequest'
+          description: |
+            Initial signing keys to provision with the scope.
+            At least one key is required for relays to validate
+            MoQ Access Tokens.
 
     Scope:
       type: object
-      description: |
-        A provisioned MoQ scope. Clients connect by combining the url
-        and token (e.g. {url}/{token}).
+      description: A provisioned MoQ Scope.
       required:
         - scope_id
         - url
-        - token
+        - supported_token_types
       properties:
         scope_id:
           type: string
@@ -57,31 +239,98 @@ components:
           example: "a1b2c3d4e5f6"
         url:
           type: string
-          description: Base URL of the relay service.
-          example: "moqt://relay.example.com"
-        token:
-          type: string
           description: |
-            Credential granting access to this scope. Included in
-            the URL path when connecting.
-          example: "eyJhbGciOiJFZDI1NTE5..."
+            MoQT URL for client connections to this scope.
+            How the CDN routes behind this URL is an operational
+            concern not exposed through this API.
+          example: "moqt://relay.example.com"
+        supported_token_types:
+          type: array
+          items:
+            type: string
+            enum: [c4m, c4m+dpop-proof+cwt]
+          description: |
+            MoQ Access Token types the relay accepts.
+            CDN providers MUST support both c4m and c4m+dpop-proof+cwt.
+          example: ["c4m", "c4m+dpop-proof+cwt"]
+        signing_keys:
+          type: array
+          items:
+            $ref: '#/components/schemas/SigningKey'
+          description: Currently provisioned signing keys.
         config:
           $ref: '#/components/schemas/ScopeConfig'
 
     ScopeConfig:
       type: object
-      description: Scope configuration.
+      description: MoQ Scope configuration.
       properties:
-        origin_fallback:
-          $ref: '#/components/schemas/OriginFallback'
+        upstream_fallback:
+          $ref: '#/components/schemas/UpstreamFallback'
 
-    OriginFallback:
-      type: object
+    UpstreamFallback:
+      type: array
       description: |
-        When configured, the relay connects to this origin to fetch
-        content not available locally.
+        List of namespace-to-URLs mappings for upstream fallback.
+        The relay connects to these Application Provider endpoints
+        when content is not available locally.
+      items:
+        type: object
+        required: [namespace_prefix, urls]
+        properties:
+          namespace_prefix:
+            type: array
+            items:
+              type: string
+            description: Namespace prefix this fallback serves.
+            example: ["live", "meeting-42"]
+          urls:
+            type: array
+            items:
+              type: string
+            description: |
+              Ordered list of upstream MoQT URLs for this namespace.
+              The relay tries them in order as fallbacks.
+            example:
+              - "moqt://publish-us.app-provider.example.com"
+              - "moqt://publish-eu.app-provider.example.com"
+
+    SigningKeyRequest:
+      type: object
+      required: [key_id, algorithm, public_key]
       properties:
-        url:
+        key_id:
           type: string
-          description: URL of the upstream origin.
-          example: "moqt://origin.example.com"
+          description: |
+            Application-provided identifier for this key.
+            Used for key rotation and revocation.
+          example: "key-2026-q3"
+        algorithm:
+          type: string
+          enum: [ES256]
+          description: Signing algorithm. ES256 is required.
+        public_key:
+          type: string
+          description: |
+            PEM-encoded public key corresponding to the private key
+            used by the Application Provider to sign MoQ Access Tokens.
+          example: "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE..."
+
+    SigningKey:
+      type: object
+      required: [key_id, algorithm, public_key]
+      properties:
+        key_id:
+          type: string
+          description: Key identifier.
+          example: "key-2026-q3"
+        algorithm:
+          type: string
+          enum: [ES256]
+        public_key:
+          type: string
+          description: PEM-encoded public key.
+        created_at:
+          type: string
+          format: date-time
+          description: When this key was provisioned.
